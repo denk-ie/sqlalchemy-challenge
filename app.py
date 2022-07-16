@@ -2,14 +2,15 @@ import sqlalchemy
 from flask import Flask, jsonify
 import datetime as dt
 import numpy as np
+import sqlalchemy
 from sqlalchemy.ext.automap import automap_base
 from sqlalchemy.orm import Session
-from sqlalchemy import create_engine, func, inspect
+from sqlalchemy import create_engine, func
+import sqlite3
 
 engine = create_engine("sqlite:///Resources/hawaii.sqlite")
 Base = automap_base()
 Base.prepare(engine, reflect=True)
-Base.classes.keys()
 
 Measurement = Base.classes.measurement
 Station = Base.classes.station
@@ -21,7 +22,6 @@ app = Flask(__name__)
 @app.route("/")
 def main():
     return (
-        f"Welcome to the Climate App Home Page!<br>"
         f"Available Routes:<br>"
         f"/api/v1.0/precipitation<br>"
         f"/api/v1.0/stations<br>"
@@ -31,12 +31,11 @@ def main():
     )
     
 @app.route("/api/v1.0/precipitation")
-def precip():
-    prev_year = dt.date(2017,8,23)- dt.timedelta(days=365)
-    results = session.query(Measurement.date, Measurement.prcp).filter(Measurement.date >= prev_year).\
+def precipitation():
+    year_ago = dt.date(2017,8,23) - dt.timedelta(days=365)
+    results = session.query(Measurement.date, Measurement.prcp).filter(Measurement.date >= year_ago).\
                 order_by(Measurement.date).all()
     result_dict = dict(results)
-    session.close()
     return jsonify(result_dict)
 
 @app.route("/api/v1.0/stations")
@@ -44,18 +43,16 @@ def stations():
     stations = session.query(Measurement.station, func.count(Measurement.id)).\
             group_by(Measurement.station).order_by(func.count(Measurement.id).desc()).all()
 
-    stations_dict = dict(stations)
-    session.close()
-    return jsonify(stations_dict)
+    stations_list = list(stations)
+    return jsonify(stations_list)
 
 @app.route("/api/v1.0/tobs")
 def tobs():
-    max_temp_obs = session.query(Measurement.station, Measurement.tobs).\
-        filter(Measurement.date >= '2016-08-23').all()
+    max_temp = session.query(Measurement.station, Measurement.tobs).\
+        filter(Measurement.date >= year_ago).all()
 
-    tobs_dict = dict(max_temp_obs)
-    session.close()
-    return jsonify(tobs_dict)
+    tobs_list = list(max_temp)
+    return jsonify(tobs_list)
 
 
 @app.route("/api/v1.0/<start>")
@@ -63,7 +60,6 @@ def start(start):
     result = session.query(func.min(Measurement.tobs), func.avg(Measurement.tobs),\
                                 func.max(Measurement.tobs)).filter(Measurement.date >= start).all()
     
-    session.close()
     tobsall = []
 
     for min,avg,max in result:
@@ -81,7 +77,6 @@ def start_end(start,end):
                 func.max(Measurement.tobs)).filter(Measurement.date >= start).\
                 filter(Measurement.date <= end).all()
 
-    session.close()
 
     tobsall = []
     for min,avg,max in queryresult:

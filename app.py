@@ -1,4 +1,3 @@
-import sqlalchemy
 from flask import Flask, jsonify
 import datetime as dt
 import numpy as np
@@ -6,7 +5,6 @@ import sqlalchemy
 from sqlalchemy.ext.automap import automap_base
 from sqlalchemy.orm import Session
 from sqlalchemy import create_engine, func
-import sqlite3
 
 engine = create_engine("sqlite:///Resources/hawaii.sqlite")
 Base = automap_base()
@@ -43,50 +41,45 @@ def stations():
     stations = session.query(Measurement.station, func.count(Measurement.id)).\
             group_by(Measurement.station).order_by(func.count(Measurement.id).desc()).all()
 
-    stations_list = list(stations)
-    return jsonify(stations_list)
+    stations_dict = dict(stations)
+    return jsonify(stations_dict)
 
 @app.route("/api/v1.0/tobs")
 def tobs():
     max_temp = session.query(Measurement.station, Measurement.tobs).\
-        filter(Measurement.date >= year_ago).all()
+        filter(Measurement.date >= "2016-08-23").all()
 
-    tobs_list = list(max_temp)
-    return jsonify(tobs_list)
+    tobs_dict = dict(max_temp)
+    return jsonify(tobs_dict)
 
+@app.route('/api/v1.0/<start>', defaults={'end': None})
+@app.route("/api/v1.0/<start>/<end>")
+def determine_temps_for_date_range(start, end):
+    session = Session(engine)
 
-@app.route("/api/v1.0/<start>")
-def start(start):
-    result = session.query(func.min(Measurement.tobs), func.avg(Measurement.tobs),\
-                                func.max(Measurement.tobs)).filter(Measurement.date >= start).all()
-    
-    tobsall = []
+    if end != None:
+        temperature_data = session.query(func.min(Measurement.tobs), func.avg(Measurement.tobs), func.max(Measurement.tobs)).\
+            filter(Measurement.date >= start).filter(
+            Measurement.date <= end).all()
+    else:
+        temperature_data = session.query(func.min(Measurement.tobs), func.avg(Measurement.tobs), func.max(Measurement.tobs)).\
+            filter(Measurement.date >= start).all()
 
-    for min,avg,max in result:
-        tobs_dict = {}
-        tobs_dict["Min"] = min
-        tobs_dict["Average"] = avg
-        tobs_dict["Max"] = max
-        tobsall.append(tobs_dict)
-        
-    return jsonify(tobsall)
+    session.close()
 
-@app.route('/api/v1.0/<start>/<end>')
-def start_end(start,end):
-    queryresult = session.query(func.min(Measurement.tobs), func.avg(Measurement.tobs),\
-                func.max(Measurement.tobs)).filter(Measurement.date >= start).\
-                filter(Measurement.date <= end).all()
+    temperature_list = []
+    no_temperature_data = False
+    for min_temp, avg_temp, max_temp in temperature_data:
+        if min_temp == None or avg_temp == None or max_temp == None:
+            no_temperature_data = True
+        temperature_list.append(min_temp)
+        temperature_list.append(avg_temp)
+        temperature_list.append(max_temp)
 
-
-    tobsall = []
-    for min,avg,max in queryresult:
-        tobs_dict = {}
-        tobs_dict["Min"] = min
-        tobs_dict["Average"] = avg
-        tobs_dict["Max"] = max
-        tobsall.append(tobs_dict)
-
-    return jsonify(tobsall)
+    if no_temperature_data == True:
+        return f"No temperature data found for the given date range. Try another date range."
+    else:
+        return jsonify(temperature_list)
 
 if __name__ == '__main__':
     app.run(debug=True)
